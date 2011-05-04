@@ -108,6 +108,11 @@ class GearmanManager {
     protected $pid = 0;
 
     /**
+     * The PID of the parent process, when running in the forked helper.
+     */
+    protected $parent_pid = 0;
+
+    /**
      * PID file for the parent process
      */
     protected $pid_file = "";
@@ -607,6 +612,8 @@ class GearmanManager {
         switch($pid) {
             case 0:
                 $this->isparent = false;
+                $this->parent_pid = $this->pid;
+                $this->pid = getmypid();
                 $this->$method();
                 break;
             case -1:
@@ -617,6 +624,13 @@ class GearmanManager {
                 $this->helper_pid = $pid;
                 while($this->wait_for_signal && !$this->stop_work) {
                     usleep(5000);
+                    pcntl_waitpid($pid, $status, WNOHANG);
+                   
+                    if (pcntl_wifexited($status) && $status) {
+                         $this->log("Child exited with non-zero exit code $status.");
+                         exit(1);
+                    }
+
                 }
                 break;
         }
@@ -628,17 +642,13 @@ class GearmanManager {
      *
      */
     protected function validate_workers(){
-
-        $parent_pid = $this->pid;
-        $this->pid = getmypid();
-
         $this->log("Helper forked", GearmanManager::LOG_LEVEL_PROC_INFO);
 
         $this->load_workers();
 
         if(empty($this->functions)){
             $this->log("No workers found");
-            posix_kill($parent_pid, SIGUSR1);
+            posix_kill($this->parent_pid, SIGUSR1);
             exit();
         }
 
@@ -647,7 +657,7 @@ class GearmanManager {
         /**
          * Since we got here, all must be ok, send a CONTINUE
          */
-        posix_kill($parent_pid, SIGCONT);
+        posix_kill($this->parent_pid, SIGCONT);
 
         if($this->check_code){
             $this->log("Running loop to check for new code", self::LOG_LEVEL_DEBUG);
@@ -661,7 +671,7 @@ class GearmanManager {
                     $this->log("{$func['path']} - $mtime $last_check_time", self::LOG_LEVEL_CRAZY);
                     if($last_check_time!=0 && $mtime > $last_check_time){
                         $this->log("New code found. Sending SIGHUP", self::LOG_LEVEL_PROC_INFO);
-                        posix_kill($parent_pid, SIGHUP);
+                        posix_kill($this->parent_pid, SIGHUP);
                         break;
                     }
                 }

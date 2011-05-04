@@ -94,7 +94,7 @@ class GearmanPeclManager extends GearmanManager {
 
         $f = $job->functionName();
 
-        if(empty($objects[$f]) && !function_exists($f) && !class_exists($f)){
+        if(empty($objects[$f]) && !function_exists($f) && !class_exists($f, false)){
 
             if(!isset($this->functions[$f])){
                 $this->log("Function $f is not a registered job name");
@@ -188,7 +188,7 @@ class GearmanPeclManager extends GearmanManager {
             if(!function_exists($func) &&
                (!class_exists($func) || !method_exists($func, "run"))){
                 $this->log("Function $func not found in ".$props["path"]);
-                posix_kill($this->pid, SIGUSR2);
+                posix_kill($this->parent_pid, SIGUSR2);
                 exit();
             }
         }
@@ -199,3 +199,4 @@ class GearmanPeclManager extends GearmanManager {
 $mgr = new GearmanPeclManager();
 
 ?>
+
